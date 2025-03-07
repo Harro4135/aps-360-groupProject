@@ -115,7 +115,7 @@ def download_coco_pose(yaml_path="coco-pose.yaml", download_train=True, download
     if download_val and not progress["val"]:
         image_downloads.append(("val2017.zip", 'http://images.cocodataset.org/zips/val2017.zip', "val"))
     if download_test and not progress["test"]:
-        image_downloads.append(("test2017.zip", 'http://images.cocodataset.org/zips/test2017.zip', "test"))
+        image_downloads.append(("test2017.zip", 'http://images.cocodataset.org/annotations/annotations_trainval2017.zip', "test"))
     
     if image_downloads:
         for filename, url, dataset_type in image_downloads:
@@ -136,7 +136,7 @@ def download_coco_pose(yaml_path="coco-pose.yaml", download_train=True, download
 
 if __name__ == "__main__":
     download_coco_pose(
-        download_train=True,  # 19GB
+        download_train=False,  # 19GB
         download_val=False,    # 1GB
-        download_test=False   # 7GB - set to True if you need test data
+        download_test=False   # 7GB 
     )
