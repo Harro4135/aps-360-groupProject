@@ -64,6 +64,10 @@ def examine_samples(images_dir, labels_dir, num_samples=5, fig_size=(10, 8)):
         print("No images found.")
         return
     
+    # Count images with matching label files
+    matching_count = sum(1 for img_path in image_files if (labels_dir / (img_path.stem + ".txt")).exists())
+    print(f"Total images with matching labels: {matching_count}")
+    
     samples = random.sample(image_files, min(num_samples, len(image_files)))
     
     for img_path in samples:
@@ -94,7 +98,6 @@ def examine_samples(images_dir, labels_dir, num_samples=5, fig_size=(10, 8)):
         plt.show()
 
 if __name__ == "__main__":
-    # Adjust these paths as needed:
-    images_dir = "../datasets/train_subset_crop/images"  # Folder with processed images
-    labels_dir = "../datasets/train_subset_crop/labels"    # Folder with label files
+    images_dir = "../datasets/train_subset_single/images"  # Folder with processed images
+    labels_dir = "../datasets/train_subset_single/labels"  # Folder with label files
     examine_samples(images_dir, labels_dir, num_samples=5, fig_size=(10, 8))

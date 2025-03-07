@@ -34,23 +34,51 @@ def write_label_file(label_path, keypoints):
     with open(label_path, 'w') as f:
         f.write(label_line + "\n")
 
+def filter_and_adjust_keypoints(keypoints):
+    """
+    Remove keypoints 14-17 (i.e. keep only the first 13 keypoints) if there
+    are exactly 17 keypoints provided. Then check that at least two keypoints are visible.
+    
+    Returns:
+      - The adjusted keypoints list if valid.
+      - None if, after removal, there are no remaining keypoints or if fewer than 2 keypoints are visible.
+    
+    Note: If the keypoints list length is not 17*3, it is left unchanged.
+    """
+    num_kps = len(keypoints) // 3
+    # If we have 17 keypoints, keep only the first 13.
+    if num_kps == 17:
+        keypoints = keypoints[:13*3]
+        num_kps = 13
+    # Count visible keypoints (visibility flag > 0)
+    visible = 0
+    for i in range(num_kps):
+        v = keypoints[3*i+2]
+        if v > 0:
+            visible += 1
+    if visible < 2:
+        return None
+    return keypoints
+
 def process_pipeline(json_path, images_dir, output_dir, padding=0.1, min_crop_w=30, min_crop_h=30):
     """
     Process images from a COCO person_keypoints JSON.
     
     For each image:
       - If only one person is annotated, copy the full image and generate a label file using normalized
-        keypoints (relative to the full image).
+        keypoints (relative to the full image) after filtering for MPII compatibility.
       - If more than one person is annotated, for each person:
           * Skip the annotation if "iscrowd" is set to 1.
           * Crop the region using the annotation bbox (with optional padding).
           * If the resulting crop's width or height is below the minimum size, skip that annotation.
-          * Otherwise, adjust keypoints (normalize relative to the crop), and write the crop and its label.
+          * Adjust keypoints relative to the crop, remove keypoints 14-17 if applicable, and only
+            retain the annotation if at least two keypoints are visible.
+          * Write the crop and its label.
     
     Args:
       json_path (str): Path to the COCO annotation JSON file.
       images_dir (str or Path): Directory containing the source images.
-      output_dir (str or Path): Directory to save the prepared test subset.
+      output_dir (str or Path): Directory to save the prepared subset.
       padding (float): Fractional padding to add around each bbox when cropping.
       min_crop_w (int): Minimum width of the cropped image.
       min_crop_h (int): Minimum height of the cropped image.
@@ -103,7 +131,11 @@ def process_pipeline(json_path, images_dir, output_dir, padding=0.1, min_crop_w=
             keypoints = ann.get('keypoints', [])
             if len(keypoints) % 3 != 0:
                 continue  # Skip if keypoints not valid.
-            norm_kps = normalize_keypoints(keypoints, W, H)
+            # Filter and adjust keypoints for MPII (remove keypoints 14-17 if present)
+            new_kps = filter_and_adjust_keypoints(keypoints)
+            if new_kps is None:
+                continue  # Skip image if too few visible keypoints after filtering.
+            norm_kps = normalize_keypoints(new_kps, W, H)
             
             out_filename = f"single_{image_id}.jpg"
             out_img_path = images_out / out_filename
@@ -134,14 +166,10 @@ def process_pipeline(json_path, images_dir, output_dir, padding=0.1, min_crop_w=
                 
                 crop = image[y1:y2, x1:x2]
                 crop_h, crop_w = crop.shape[:2]
-                # Skip the crop if it doesn't meet the minimum dimensions.
                 if crop_w < min_crop_w or crop_h < min_crop_h:
                     continue
                 
-                crop_filename = f"crop_{crop_id}.jpg"
-                crop_path = images_out / crop_filename
-                cv2.imwrite(str(crop_path), crop)
-                
+                # Adjust keypoints: shift relative to crop and normalize.
                 orig_kps = ann.get('keypoints', [])
                 num_kps = len(orig_kps) // 3
                 adjusted_kps = []
@@ -153,9 +181,18 @@ def process_pipeline(json_path, images_dir, output_dir, padding=0.1, min_crop_w=
                     norm_y = kp_y / crop_h
                     adjusted_kps.extend([norm_x, norm_y, vis])
                 
+                # Filter and adjust keypoints for MPII (remove keypoints 14-17 if present)
+                new_kps = filter_and_adjust_keypoints(adjusted_kps)
+                if new_kps is None:
+                    continue  # Skip this crop if it doesn't have enough visible keypoints.
+                
+                crop_filename = f"crop_{crop_id}.jpg"
+                crop_path = images_out / crop_filename
+                cv2.imwrite(str(crop_path), crop)
+                
                 label_filename = f"crop_{crop_id}.txt"
                 label_path = labels_out / label_filename
-                write_label_file(label_path, adjusted_kps)
+                write_label_file(label_path, new_kps)
                 
                 crop_id += 1
                 multi_count += 1
@@ -167,11 +204,6 @@ if __name__ == "__main__":
     # Adjust these paths as needed:
     json_path = "../datasets/annotations_trainval2017/person_keypoints_train2017.json"
     images_dir = "../datasets/coco-pose/images/train2017/train2017"  # Folder containing original images
-    output_dir = "../datasets/train_subset_crop"                       # Folder where the test subset will be stored
+    output_dir = "../datasets/train_subset_crop"                       # Folder where the subset will be stored
     
     process_pipeline(json_path, images_dir, output_dir, padding=0.1)
-
-
-    #Processed 64115 images: 24832 single-person images and 144444 person crops from multi-person images.
-
-    #Processed 2693 images: 1045 single-person images and 6196 person crops from multi-person images.
