@@ -4,6 +4,38 @@ import cv2
 import matplotlib.pyplot as plt
 import random
 
+def standardize_images(input_dir, output_dir, target_size=(224, 224)):
+    """
+    Resize all .jpg images in input_dir to target size and save to output_dir.
+    
+    Args:
+      input_dir (str or Path): Directory containing the images.
+      output_dir (str or Path): Directory where resized images will be saved.
+      target_size (tuple): Desired output size (width, height). Default is 224x224.
+    """
+    input_dir = Path(input_dir)
+    output_dir = Path(output_dir)
+    os.makedirs(output_dir, exist_ok=True)
+    
+    image_files = list(input_dir.glob("*.jpg"))
+    if not image_files:
+        print("No images found in the input directory.")
+        return
+    
+    count = 0
+    for img_path in image_files:
+        img = cv2.imread(str(img_path))
+        if img is None:
+            print(f"Failed to load image: {img_path}")
+            continue
+        # Resize image to target_size (cv2.resize expects (width, height))
+        resized = cv2.resize(img, target_size)
+        out_path = output_dir / img_path.name
+        cv2.imwrite(str(out_path), resized)
+        count += 1
+    
+    print(f"Resized and saved {count} images to {output_dir}")
+
 def load_labels(label_path):
     """
     Read a label file and parse it.
@@ -125,6 +157,8 @@ if __name__ == "__main__":
     # Optionally, provide label directories; if not, pass None.
     original_labels_dir = "../datasets/train_subset_single/labels"
     standardized_labels_dir = "../datasets/train_subset_single/labels"  
+
+    standardize_images(original_dir, standardized_dir, target_size=(220, 220))
     
     compare_images(original_dir, standardized_dir, num_samples=5, figsize=(12, 6),
                    original_labels_dir=original_labels_dir,
