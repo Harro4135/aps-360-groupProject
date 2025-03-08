@@ -150,7 +150,62 @@ def compare_images(original_dir, standardized_dir, num_samples=5, figsize=(12, 6
         plt.axis("off")
         
         plt.show()
-
+def compare_original_and_annotated(input_dir, labels_dir, num_samples=5, figsize=(12, 6)):
+    """
+    Display side-by-side comparison of original images and images with keypoints annotated.
+    
+    Args:
+        input_dir (str or Path): Directory containing the original images.
+        labels_dir (str or Path): Directory containing the label files (keypoints).
+        num_samples (int): Number of sample images to display.
+        figsize (tuple): Figure size for the Matplotlib window.
+    """
+    input_dir = Path(input_dir)
+    labels_dir = Path(labels_dir) if labels_dir is not None else None
+    
+    image_files = list(input_dir.glob("*.jpg"))
+    if not image_files:
+        print("No images found in the input directory.")
+        return
+    
+    samples = random.sample(image_files, min(num_samples, len(image_files)))
+    
+    for img_path in samples:
+        # Read the original image.
+        orig_img = cv2.imread(str(img_path))
+        if orig_img is None:
+            print(f"Failed to load image: {img_path}")
+            continue
+        
+        # Create a copy for annotation.
+        annotated_img = orig_img.copy()
+        
+        # If a corresponding label file exists, load keypoints and annotate.
+        if labels_dir is not None:
+            label_file = labels_dir / (img_path.stem + ".txt")
+            if label_file.exists():
+                keypoints = load_labels(label_file)
+                annotated_img = annotate_image(annotated_img, keypoints)
+        
+        # Convert from BGR to RGB for correct display in Matplotlib.
+        orig_img_rgb = cv2.cvtColor(orig_img, cv2.COLOR_BGR2RGB)
+        annotated_img_rgb = cv2.cvtColor(annotated_img, cv2.COLOR_BGR2RGB)
+        
+        # Plot side by side.
+        plt.figure(figsize=figsize)
+        plt.suptitle(f"Image: {img_path.name}", fontsize=16)
+        
+        plt.subplot(1, 2, 1)
+        plt.imshow(orig_img_rgb)
+        plt.title("Original")
+        plt.axis("off")
+        
+        plt.subplot(1, 2, 2)
+        plt.imshow(annotated_img_rgb)
+        plt.title("Annotated with Keypoints")
+        plt.axis("off")
+        
+        plt.show()
 if __name__ == "__main__":
     original_dir = "../datasets/train_subset_single/images"  # Directory with original images.
     standardized_dir = "../datasets/train_subset_single/standardized_images"  # Directory with standardized images.
@@ -158,8 +213,7 @@ if __name__ == "__main__":
     original_labels_dir = "../datasets/train_subset_single/labels"
     standardized_labels_dir = "../datasets/train_subset_single/labels"  
 
-    standardize_images(original_dir, standardized_dir, target_size=(220, 220))
-    
     compare_images(original_dir, standardized_dir, num_samples=5, figsize=(12, 6),
                    original_labels_dir=original_labels_dir,
                    standardized_labels_dir=standardized_labels_dir)
+    #compare_original_and_annotated(original_dir, original_labels_dir, num_samples=5, figsize=(12, 6))
