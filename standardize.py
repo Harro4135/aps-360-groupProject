@@ -207,12 +207,13 @@ def compare_original_and_annotated(input_dir, labels_dir, num_samples=5, figsize
         
         plt.show()
 if __name__ == "__main__":
-    original_dir = "../datasets/train_subset_single/images"  # Directory with original images.
-    standardized_dir = "../datasets/train_subset_single/standardized_images"  # Directory with standardized images.
+    original_dir = "../datasets/val_subset_single/images"  # Directory with original images.
+    standardized_dir = "../datasets/val_subset_single/standardized_images"  # Directory with standardized images.
     # Optionally, provide label directories; if not, pass None.
-    original_labels_dir = "../datasets/train_subset_single/labels"
-    standardized_labels_dir = "../datasets/train_subset_single/labels"  
+    original_labels_dir = "../datasets/val_subset_single/labels"
+    standardized_labels_dir = "../datasets/val_subset_single/labels"  
 
+    standardize_images(original_dir, standardized_dir)
     compare_images(original_dir, standardized_dir, num_samples=5, figsize=(12, 6),
                    original_labels_dir=original_labels_dir,
                    standardized_labels_dir=standardized_labels_dir)

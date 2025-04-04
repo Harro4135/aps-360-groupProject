@@ -12,6 +12,18 @@ import cv2
 from pathlib import Path
 import matplotlib.pyplot as plt
 
+def hard_argmax(heatmaps):
+    B, J, H, W = heatmaps.shape
+    # Flatten each heatmap to shape [B, J, H*W]
+    flat = heatmaps.view(B, J, -1)
+    # Get indices of maximum value
+    indices = flat.argmax(dim=-1)  # shape [B, J]
+    # Compute x and y coordinates
+    x = indices % W
+    y = indices // W
+    coords = torch.stack((x.float(), y.float()), dim=-1)
+    return coords
+
 # Model Architecture
 class ClosedPose(nn.Module):
     def __init__(self, num_joints=13):
@@ -43,124 +55,34 @@ class ClosedPose(nn.Module):
         return heatmaps
 
 # Soft Argmax with Threshold
-def soft_argmax(heatmaps, threshold=0.1):
+def soft_argmax(heatmaps, threshold=None):
+    """
+    Computes the soft-argmax to extract (x, y) coordinates from heatmaps.
+    
+    Parameters:
+      heatmaps: tensor of shape [B, num_joints, H, W].
+      threshold: if provided, zero out probabilities below this value (optional).
+    
+    Returns:
+      coords: tensor of shape [B, num_joints, 2] with estimated x, y coordinates.
+    """
     batch_size, num_joints, H, W = heatmaps.shape
     heatmaps = heatmaps.view(batch_size, num_joints, -1)
     heatmaps = F.softmax(heatmaps, dim=-1)
-    heatmaps = torch.where(heatmaps > threshold, heatmaps, torch.zeros_like(heatmaps))
-    heatmaps = heatmaps / (heatmaps.sum(dim=-1, keepdim=True) + 1e-6)
+    
+    if threshold is not None:
+        heatmaps = torch.where(heatmaps > threshold, heatmaps, torch.zeros_like(heatmaps))
+        # Renormalize after thresholding
+        heatmaps = heatmaps / (heatmaps.sum(dim=-1, keepdim=True) + 1e-6)
+    
+    # Create coordinate grids.
     x_grid = torch.linspace(0, W - 1, W, device=heatmaps.device).repeat(H, 1).view(H * W)
     y_grid = torch.linspace(0, H - 1, H, device=heatmaps.device).repeat(W, 1).t().contiguous().view(H * W)
+    
     x = torch.sum(heatmaps * x_grid, dim=-1)
     y = torch.sum(heatmaps * y_grid, dim=-1)
     coords = torch.stack((x, y), dim=-1)
     return coords
-
-# Dataset Class
-# class KeypointDataset(Dataset):
-#     def __init__(self, images_dir, labels_dir, augment=True, max_images=None):
-#         self.images_dir = Path(images_dir)
-#         self.labels_dir = Path(labels_dir)
-#         self.image_paths = [p for p in self.images_dir.glob("*.jpg") if (self.labels_dir / f"{p.stem}.txt").exists()]
-#         if max_images is not None:
-#             self.image_paths = self.image_paths[:max_images]
-#         self.augment = augment
-
-#     def __len__(self):
-#         return len(self.image_paths)
-
-#     def __getitem__(self, idx):
-#         # Load image
-#         image_path = self.image_paths[idx]
-#         img = cv2.imread(str(image_path))
-#         if img is None:
-#             raise RuntimeError(f"Failed to load image: {image_path}")
-#         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-#         img = Image.fromarray(img)
-
-#         # Load keypoints and visibility
-#         label_path = self.labels_dir / (image_path.stem + ".txt")
-#         with open(label_path, 'r') as f:
-#             line = f.readline().strip()
-#         parts = line.split()
-#         kp_values = parts[1:]  # Skip the first value (class label)
-#         kp_array = np.array(kp_values, dtype=float).reshape(-1, 3)  # Shape: (13, 3)
-#         keypoints = kp_array[:, 0:2]  # Shape: (13, 2)
-#         visibility = kp_array[:, 2]   # Shape: (13,)
-        
-#         # Scale keypoints from [0, 1] to [0, 224]
-#         keypoints *= 224
-#         keypoints = torch.tensor(keypoints, dtype=torch.float32)
-#         visibility = torch.tensor(visibility, dtype=torch.float32)
-
-#         # Always resize the image to 224x224
-#         img = TF.resize(img, (224, 224))
-
-#         # Apply augmentations if enabled
-#         if self.augment:
-#             # RandomHorizontalFlip
-#             if torch.rand(1) < 0.5:
-#                 img = TF.hflip(img)
-#                 keypoints[:, 0] = 224 - keypoints[:, 0]
-#                 swap_indices = [(1, 2), (3, 4), (5, 6), (7, 8), (9, 10), (11, 12)]
-#                 for left, right in swap_indices:
-#                     keypoints[[left, right]] = keypoints[[right, left]]
-#                     visibility[[left, right]] = visibility[[right, left]]
-#             # RandomRotation
-#             angle = torch.FloatTensor(1).uniform_(-15, 15).item()
-#             img = TF.rotate(img, angle)
-#             cx, cy = 112, 112
-#             angle_rad = math.radians(angle)
-#             cos_a = math.cos(angle_rad)
-#             sin_a = math.sin(angle_rad)
-#             x = keypoints[:, 0] - cx
-#             y = keypoints[:, 1] - cy
-#             keypoints[:, 0] = cx + x * cos_a - y * sin_a
-#             keypoints[:, 1] = cy + x * sin_a + y * cos_a
-#             # RandomAffine (scaling only)
-#             scale = torch.FloatTensor(1).uniform_(0.8, 1.2).item()
-#             img = TF.affine(img, angle=0, translate=(0, 0), scale=scale, shear=0)
-#             keypoints *= scale
-#             keypoints = torch.clamp(keypoints, 0, 224)
-
-#         # Always convert to tensor and normalize
-#         img = TF.to_tensor(img)
-#         img = TF.normalize(img, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-
-#         return img, keypoints, visibility
-
-# Utility Functions
-def generate_heatmaps_batch(keypoints, H=224, W=224, sigma=4):
-    """
-    Vectorized generation of Gaussian heatmaps for a batch of keypoints.
-    keypoints: tensor of shape [B, num_joints, 2] in pixel space
-    Returns: tensor of shape [B, numjoints, H, W]
-    If a keypoint is (0,0) (assumed missing/invisible), its heatmap will be all zeros.
-    """
-    B, J,  = keypoints.shape
-    device = keypoints.device
-    # Create coordinate grid once.
-    x_lin = torch.linspace(0, W - 1, W, device=device)
-    y_lin = torch.linspace(0, H - 1, H, device=device)
-    y_grid, x_grid = torch.meshgrid(y_lin, x_lin, indexing="ij")  # shape: [H, W]
-    # Expand grid to match batch & joints.
-    # Final shapes: [B, J, H, W]
-    x_grid = x_grid.unsqueeze(0).unsqueeze(0)  # shape [1,1,H,W]
-    y_grid = y_grid.unsqueeze(0).unsqueeze(0)
-    # Expand keypoints from shape [B, J, 2] to [B, J, 1, 1]    
-    kp_exp = keypoints.unsqueeze(-1).unsqueeze(-1)
-    kp_x = kp_exp[:, :, 0, :, :]  # shape [B, J, 1, 1]
-    kp_y = kp_exp[:, :, 1, :, :]
-
-# Compute squared distance from the keypoint location    
-    dist_sq = (x_grid - kp_x)**2 + (y_grid - kp_y)**2
-    # Compute Gaussian heatmaps
-    heatmaps = torch.exp(-dist_sq / (2 * sigma*2))
-
-# If a keypoint is (0,0) (assuming missing) then set its heatmap to zero.    
-    mask_missing = (keypoints.abs().sum(dim=-1) == 0).unsqueeze(-1).unsqueeze(-1)
-    heatmaps = heatmaps (1 - mask_missing.float())
-    return heatmaps
 
 class EmbedKeypointDataset(Dataset):
     def __init__(self, embeds_dir, labels_dir, transform=None, max_images=None):
@@ -203,9 +125,46 @@ class EmbedKeypointDataset(Dataset):
         kp_array = np.array(kp_values, dtype=float).reshape(-1, 3)
         # Remove the class id (first value) from each keypoint.
         kp_array = kp_array[:, :2]
-        label_tensor = torch.tensor(kp_array, dtype=torch.float32).view(-1)
+        kp_array *= 224
+        label_tensor = torch.tensor(kp_array, dtype=torch.float32)
         
         return embedding_tensor, label_tensor
+
+# Utility Functions
+def generate_heatmaps_batch(keypoints, H=224, W=224, sigma=4):
+    """
+    Vectorized generation of Gaussian heatmaps for a batch of keypoints.
+    keypoints: tensor of shape [B, num_joints, 2] in pixel space
+    Returns: tensor of shape [B, num_joints, H, W]
+    If a keypoint is (0,0) (assumed missing/invisible), its heatmap will be all zeros.
+    """
+    B, J, _ = keypoints.shape
+    device = keypoints.device
+    # Create coordinate grid once.
+    x_lin = torch.linspace(0, W - 1, W, device=device)
+    y_lin = torch.linspace(0, H - 1, H, device=device)
+    y_grid, x_grid = torch.meshgrid(y_lin, x_lin, indexing="ij")  # shape: [H, W]
+    # Expand grid to match batch & joints.
+    # Final shapes: [B, J, H, W]
+    x_grid = x_grid.unsqueeze(0).unsqueeze(0)  # shape [1,1,H,W]
+    y_grid = y_grid.unsqueeze(0).unsqueeze(0)
+    
+    # Expand keypoints from shape [B, J, 2] to [B, J, 1, 1]
+    kp_exp = keypoints.unsqueeze(-1).unsqueeze(-1)
+    kp_x = kp_exp[:, :, 0, :, :]  # shape [B, J, 1, 1]
+    kp_y = kp_exp[:, :, 1, :, :]
+    
+    # Compute squared distance from the keypoint location
+    dist_sq = (x_grid - kp_x)**2 + (y_grid - kp_y)**2
+    # Compute Gaussian heatmaps
+    heatmaps = torch.exp(-dist_sq / (2 * sigma**2))
+    
+    # If a keypoint is (0,0) (assuming missing) then set its heatmap to zero.
+    mask_missing = (keypoints.abs().sum(dim=-1) == 0).unsqueeze(-1).unsqueeze(-1)
+    heatmaps = heatmaps * (1 - mask_missing.float())
+    return heatmaps
+
+
 
 # Training and Evaluation Functions
 class KeypointDataset(Dataset):
@@ -242,14 +201,12 @@ class KeypointDataset(Dataset):
         return image_tensor, label_tensor
 
 # Focal Loss
-def focal_loss(pred, target, alpha=4, beta=2):
-    pred = torch.clamp(pred, 1e-6, 1 - 1e-6)
-    pos_loss = -alpha * (1 - pred) ** beta * target * torch.log(pred)
-    neg_loss = -(1 - target) * torch.log(1 - pred)
-    loss = (pos_loss + neg_loss).mean()
-    return loss
-
 def weighted_mse_loss(pred, target, alpha=55.0, beta=5.0, threshold=0.1):
+    """
+    Compute a weighted mean squared error loss.
+    Pixels with ground truth value greater than 'threshold' are considered foreground and weighted by alpha.
+    Background pixels are weighted by beta.
+    """
     # Create a weight tensor matching the target shape
     weights = torch.where(target > threshold,
                           torch.tensor(alpha, device=target.device),
@@ -265,74 +222,93 @@ def train(model, train_loader, val_loader, batch_size=30, learning_rate=0.00001,
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=5)
     
     H, W = 224, 224
+    data = [0] * num_epochs
     
     for epoch in range(num_epochs):
         model.train()
         running_loss = 0.0
+        running_train_pck = 0.0
+        train_count = 0
+        
         for images, labels in train_loader:
-            images, labels = images.to(device), labels.to(device)
-            images = images.squeeze()
+            images, labels = images.to(device), labels.to(device)  # labels: [B, 13, 2]
             optimizer.zero_grad()
-            
+            images = images.squeeze(1)
             heatmap_outputs = model(images)
             heatmap_outputs = F.interpolate(heatmap_outputs, size=(H, W), mode='bilinear', align_corners=False)
-            print(labels.shape)
-            gt_heatmaps = generate_heatmaps_batch(labels).to(device)
+            # Batch generate ground truth heatmaps (shape: [B, 13, H, W])
+            gt_heatmaps = generate_heatmaps_batch(labels, H=H, W=W, sigma=4)
             
             loss = weighted_mse_loss(heatmap_outputs, gt_heatmaps)
             loss.backward()
             optimizer.step()
-            running_loss += loss.item()
+            running_loss += loss.item() 
+            
+            # Compute training PCK on this batch
+            batch_pck = compute_pck(heatmap_outputs, labels)
+            bsize = images.size(0)
+            running_train_pck += batch_pck * bsize
+            train_count += bsize
         
         avg_train_loss = running_loss / len(train_loader)
+        avg_train_pck = running_train_pck / train_count
         
         model.eval()
         val_running_loss = 0.0
+        running_val_pck = 0.0
+        val_count = 0
         with torch.no_grad():
             for images, labels in val_loader:
                 images, labels = images.to(device), labels.to(device)
+                images = images.squeeze(1)
                 heatmap_outputs = model(images)
                 heatmap_outputs = F.interpolate(heatmap_outputs, size=(H, W), mode='bilinear', align_corners=False)
-                gt_heatmaps = generate_heatmaps_batch(labels).to(device)
+                gt_heatmaps = generate_heatmaps_batch(labels, H=H, W=W, sigma=4)
                 loss = weighted_mse_loss(heatmap_outputs, gt_heatmaps)
                 val_running_loss += loss.item()
+                
+                batch_pck = compute_pck(heatmap_outputs, labels)
+                bsize = images.size(0)
+                running_val_pck += batch_pck * bsize
+                val_count += bsize
+                
         avg_val_loss = val_running_loss / len(val_loader)
+        avg_val_pck = running_val_pck / val_count
         scheduler.step(avg_val_loss)
         
-        print(f"Epoch [{epoch+1}/{num_epochs}] Train Loss: {avg_train_loss:.4f}, Val Loss: {avg_val_loss:.4f}")
-        
-        if (epoch + 1) % 10 == 0:
-            with torch.no_grad():
-                images, labels = next(iter(val_loader))
-                images = images.to(device)
-                pred_heatmaps = model(images)
-                pred_heatmaps = F.interpolate(pred_heatmaps, size=(H, W), mode='bilinear', align_corners=False)
-                gt_heatmaps = generate_heatmaps_batch(labels).to(device)
-                plot_heatmaps(images, gt_heatmaps, pred_heatmaps)
-    
+        print(f"lr={learning_rate}, batch size={batch_size}"
+              f"Epoch [{epoch+1}/{num_epochs}] "
+              f"Train Loss: {avg_train_loss:.4f}, Train PCK: {avg_train_pck*100:.2f}% | "
+              f"Val Loss: {avg_val_loss:.4f}, Val PCK: {avg_val_pck*100:.2f}%")
+
+        torch.save(model.state_dict(), "../checkpoints/" + "model1_" + str(learning_rate) + "_" + str(batch_size) + "_" + str(epoch) + ".pth")
+        data[epoch] = [epoch, avg_train_loss, avg_train_pck, avg_val_loss, avg_val_pck]
+
+        # if (epoch + 1) % 10 == 0:
+        #     with torch.no_grad():
+        #         images, labels = next(iter(val_loader))
+        #         images = images.to(device)
+        #         images = images.squeeze(1)
+        #         pred_heatmaps = model(images)
+        #         pred_heatmaps = F.interpolate(pred_heatmaps, size=(H, W), mode='bilinear', align_corners=False)
+        #         gt_heatmaps = generate_heatmaps_batch(labels.to(device), H=H, W=W, sigma=4)
+        #         plot_heatmaps(images, gt_heatmaps, pred_heatmaps)
+    data = np.asarray(data)
+    np.savetxt("../stats/" + "model1_" + str(learning_rate) + "_" + str(batch_size) + "_" + str(epoch) + ".csv", data, header="epoch, train loss, train pck, val loss, val pck", delimiter=",")
     return model
 
-# PCK Evaluation
-def compute_pck(outputs, labels, threshold=22.4):
-    coords = soft_argmax(outputs)
-    batch_size = coords.shape[0]
-    labels = labels.view(batch_size, 13, 2)
-    distances = torch.norm(coords - labels, dim=2)
-    correct = (distances < threshold).float()
-    pck_per_sample = correct.mean(dim=1)
-    return pck_per_sample.mean().item()
-
-def evaluate(model, data_loader, device='cuda', threshold=22.4):
+def evaluate(model, data_loader, device='cuda', threshold=20):
     model.eval()
     total_loss = 0.0
     total_pck = 0.0
     count = 0
+    H, W = 224, 224
     with torch.no_grad():
         for inputs, labels in data_loader:
             inputs, labels = inputs.to(device), labels.to(device)
             outputs = model(inputs)
-            outputs = F.interpolate(outputs, size=(224, 224), mode='bilinear', align_corners=False)
-            gt_heatmaps = generate_heatmaps_batch(labels).to(device)
+            outputs = F.interpolate(outputs, size=(H, W), mode='bilinear', align_corners=False)
+            gt_heatmaps = generate_heatmaps_batch(labels, H=H, W=W, sigma=4)
             loss = weighted_mse_loss(outputs, gt_heatmaps)
             total_loss += loss.item() * inputs.size(0)
             batch_pck = compute_pck(outputs, labels, threshold)
@@ -343,6 +319,39 @@ def evaluate(model, data_loader, device='cuda', threshold=22.4):
     print(f'Validation Loss: {avg_loss:.4f}, PCK: {avg_pck*100:.2f}%')
     return avg_loss, avg_pck
 
+# PCK Evaluation
+def compute_pck(outputs, labels, threshold=5):
+    """
+    Compute PCK only for keypoints whose labels are not [0, 0].
+    outputs: predicted heatmaps used with soft_argmax to get coordinates (shape: [B, 13, H, W])
+    labels: ground truth keypoints (shape: [B, 13, 2])
+    threshold: distance threshold (in pixels)
+    """
+    coords = hard_argmax(outputs)  # shape: [B, 13, 2]
+    batch_size = coords.shape[0]
+    labels = labels.view(batch_size, -1, 2)  # [B, 13, 2]
+    
+    # Create a mask for valid keypoints (i.e., not both coordinates equal to 0)
+    valid_mask = ~((labels == 0).all(dim=2))  # shape: [B, 13], True if keypoint is valid
+    
+    # Compute Euclidean distances per keypoint
+    distances = torch.norm(coords - labels, dim=2)  # shape: [B, 13]
+    
+    # For each keypoint, if distance < threshold, mark it correct (only if valid)
+    correct = ((distances < threshold).float() * valid_mask.float())  # shape: [B, 13]
+    
+    # For each sample, count number of valid keypoints (avoid division by zero)
+    valid_counts = valid_mask.sum(dim=1).float()  # shape: [B]
+    
+    per_sample_pck = []
+    for i in range(batch_size):
+        if valid_counts[i] > 0:
+            pck = correct[i].sum() / valid_counts[i]
+        else:
+            pck = torch.tensor(0.0, device=correct.device)
+        per_sample_pck.append(pck)
+    per_sample_pck = torch.stack(per_sample_pck)
+    return per_sample_pck.mean().item()
 # Visualization
 def plot_heatmaps(images, gt_heatmaps, pred_heatmaps, num_samples=2):
     for i in range(min(num_samples, images.size(0))):
@@ -361,13 +370,15 @@ def plot_heatmaps(images, gt_heatmaps, pred_heatmaps, num_samples=2):
         plt.title("Predicted Heatmap")
         plt.show()
 
-
 if __name__ == "__main__":
-    model = ClosedPose()
-    if torch.cuda.is_available():
-        model = model.cuda()
     val_data = EmbedKeypointDataset('../datasets/val_subset_single/embeddings', '../datasets/val_subset_single/labels')
     train_data = EmbedKeypointDataset('../datasets/train_subset_single/embeddings', '../datasets/train_subset_single/labels')
-    train_loader = DataLoader(train_data, batch_size=30)
-    val_loader = DataLoader(val_data, batch_size=30)
-    train(model, train_loader, val_loader)
+    for j in [30, 100, 300, 10]:
+        train_loader = DataLoader(train_data, batch_size=j)
+        val_loader = DataLoader(val_data, batch_size=j)
+        for i in [0.00001, 0.0001, 0.00003, 0.0003]:
+            model = ClosedPose()
+            if torch.cuda.is_available():
+                model = model.cuda()
+            train(model, train_loader, val_loader, learning_rate=i, batch_size=j, num_epochs=50)
+    
