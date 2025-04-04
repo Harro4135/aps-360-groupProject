@@ -26,7 +26,7 @@ SKELETON = [
     (8, 10), (10, 12) # Right hip to knee to ankle
 ]
 model = ClosedPose()
-path = torch.load("../checkpoints/model1_0.0001_100_49.pth")
+path = torch.load("../checkpoints/model1_0.0003_100_41.pth")
 model.load_state_dict(path)
 resnet50 = models.resnet50(weights='IMAGENET1K_V1')
 resnet50 = resnet50.eval()
@@ -40,9 +40,11 @@ if torch.cuda.is_available():
     model = model.cuda()
     feature_extractor = feature_extractor.cuda()
 
-image_path = "../datasets/val_subset_single/standardized_images/single_97278.jpg"
+num = "199055"
 
-label_path = "../datasets/val_subset_single/labels/single_97278.txt"
+image_path = "../datasets/val_subset_single/standardized_images/single_"+num+".jpg"
+
+label_path = "../datasets/val_subset_single/labels/single_"+num+".txt"
 
 img = cv2.imread(str(image_path))
 if img is None:
