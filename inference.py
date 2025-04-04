@@ -40,9 +40,9 @@ if torch.cuda.is_available():
     model = model.cuda()
     feature_extractor = feature_extractor.cuda()
 
-image_path = "../datasets/val_subset_single/standardized_images/single_88970.jpg"
+image_path = "../datasets/val_subset_single/standardized_images/single_97278.jpg"
 
-label_path = "../datasets/val_subset_single/labels/single_88970.txt"
+label_path = "../datasets/val_subset_single/labels/single_97278.txt"
 
 img = cv2.imread(str(image_path))
 if img is None:
