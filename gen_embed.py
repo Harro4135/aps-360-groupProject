@@ -78,8 +78,8 @@ class KeypointDataset(Dataset):
 
 def create_embeddings(feature_extractor):
     '''create and save embeddings for images in the image folder all individually'''
-    source_dir = '../datasets/train_subset_single/standardized_images'
-    target_dir = Path('../datasets/train_subset_single/embeddings')
+    source_dir = '../datasets/val_subset_single/standardized_images'
+    target_dir = Path('../datasets/val_subset_single/embeddings')
     target_dir.mkdir(parents=True, exist_ok=True)
     image_paths = Path(source_dir).glob("*.jpg")
     feature_extractor.eval()
@@ -158,8 +158,8 @@ class EmbedKeypointDataset(Dataset):
 if __name__ == "__main__":
     # Load the dataset
     transform = transforms.Compose([transforms.ToTensor()])
-    train_data = KeypointDataset('../datasets/train_subset_single/standardized_images',
-                                  '../datasets/train_subset_single/labels',
+    train_data = KeypointDataset('../datasets/val_subset_single/standardized_images',
+                                  '../datasets/val_subset_single/labels',
                                   transform=transform,
                                   max_images=500)    
     # Create embeddings

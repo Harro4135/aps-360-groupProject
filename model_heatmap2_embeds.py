@@ -33,23 +33,23 @@ class ClosedPose(nn.Module):
         # resnet = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V1)
         # self.feature_extractor = nn.Sequential(*list(resnet.children())[:-2])
         self.decoder = nn.Sequential(
-            nn.Conv2d(2048, 3072, 3, 2, 0),
-            nn.BatchNorm2d(3072),
-            nn.ReLU(inplace=True),
-            nn.Dropout2d(p=0.1),
-            nn.Conv2d(3072, 4096, kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm2d(4096),
-            nn.ReLU(inplace=True),
-            nn.Dropout2d(p=0.1),
-            nn.ConvTranspose2d(4096, 3072, kernel_size=3, stride=1, padding=0),
-            nn.BatchNorm2d(3072),
-            nn.ReLU(inplace=True),
-            nn.Dropout2d(p=0.1),
-            nn.ConvTranspose2d(3072, 2048, kernel_size=3, stride=2, padding=0),
+            nn.Conv2d(2048, 2048, 3, 2, 0),
             nn.BatchNorm2d(2048),
             nn.ReLU(inplace=True),
             nn.Dropout2d(p=0.1),
-            nn.ConvTranspose2d(2048, 512, kernel_size=4, stride=2, padding=1),
+            nn.Conv2d(2048, 2048, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(2048),
+            nn.ReLU(inplace=True),
+            nn.Dropout2d(p=0.1),
+            nn.ConvTranspose2d(2048, 1536, kernel_size=3, stride=1, padding=0),
+            nn.BatchNorm2d(1536),
+            nn.ReLU(inplace=True),
+            nn.Dropout2d(p=0.1),
+            nn.ConvTranspose2d(1536, 1024, kernel_size=3, stride=2, padding=0),
+            nn.BatchNorm2d(1024),
+            nn.ReLU(inplace=True),
+            nn.Dropout2d(p=0.1),
+            nn.ConvTranspose2d(1024, 512, kernel_size=4, stride=2, padding=1),
             nn.BatchNorm2d(512),
             nn.ReLU(inplace=True),
             nn.Dropout2d(p=0.1),
@@ -395,12 +395,13 @@ if __name__ == "__main__":
     torch.manual_seed(420)
     val_data = EmbedKeypointDataset('../datasets/val_subset_single/embeddings', '../datasets/val_subset_single/labels')
     train_data = EmbedKeypointDataset('../datasets/train_subset_single/embeddings', '../datasets/train_subset_single/labels')
-    for j in [30, 100, 300, 10]:
+    for j in [10, 300, 100, 30]:
         train_loader = DataLoader(train_data, batch_size=j)
         val_loader = DataLoader(val_data, batch_size=j)
         for i in [0.00001, 0.0001, 0.00003, 0.0003]:
             model = ClosedPose()
             if torch.cuda.is_available():
                 model = model.cuda()
+                print("Using GPU")
             train(model, train_loader, val_loader, learning_rate=i, batch_size=j, num_epochs=70)
     

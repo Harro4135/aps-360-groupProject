@@ -31,6 +31,7 @@ for path in paths:
     max_val_pck_epoch = my_data[:, 4].argmax()
     print("Max val pck: ", max_val_pck)
     print("Max val pck epoch: ", max_val_pck_epoch)
+    print("Model: ", name)
     if max_val_pck > max_val_pck_o:
         max_val_pck_o = max_val_pck
         max_val_pck_epoch_o = max_val_pck_epoch
