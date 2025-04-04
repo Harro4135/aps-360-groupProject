@@ -25,18 +25,19 @@ SKELETON = [
     (8, 10), (10, 12) # Right hip to knee to ankle
 ]
 model = ClosedPose()
-path = torch.load("../checkpoints/model1_1e-05_30_19.pth")
+path = torch.load("../checkpoints/model1_0.0001_100_49.pth")
 model.load_state_dict(path)
 resnet50 = models.resnet50(weights='IMAGENET1K_V1')
+resnet50 = resnet50.eval()
 
 feature_extractor = nn.Sequential(*list(resnet50.children())[:-2])
+
+model = model.eval()
+feature_extractor = feature_extractor.eval()
 
 if torch.cuda.is_available():
     model = model.cuda()
     feature_extractor = feature_extractor.cuda()
-
-model = model.eval()
-feature_extractor = feature_extractor.eval()
 
 image_path = "../datasets/val_subset_single/standardized_images/single_10764.jpg"
 
@@ -82,6 +83,7 @@ def plot_keypoints_and_heatmaps(images, labels, pred_heatmaps, num_samples=2):
         std = np.array([0.229, 0.224, 0.225])
         img = img * std + mean
         img = np.clip(img, 0, 1)
+        print(labels)
         
         # ---- Ground truth keypoints ----
         # Labels are assumed normalized in [0,1]; scale to [0, H-1] (224 in our case)
@@ -100,13 +102,16 @@ def plot_keypoints_and_heatmaps(images, labels, pred_heatmaps, num_samples=2):
         # Panel 1: Ground Truth Keypoints Overlay
         plt.subplot(1,3,1)
         plt.imshow(img)
-        # for j, (x, y) in enumerate(gt_coords):
-        #     plt.scatter(x, y, color='red', s=60)
-        #     plt.text(x + 3, y, JOINT_NAMES[j], color='red', fontsize=8)
-        # for (j1, j2) in SKELETON:
-        #     x1, y1 = gt_coords[j1]
-        #     x2, y2 = gt_coords[j2]
-        #     plt.plot([x1, x2], [y1, y2], 'r-', linewidth=1)
+        print("GT coords: ", gt_coords)
+        print(len(gt_coords))
+        for j, (x, y) in enumerate(gt_coords):
+            plt.scatter(x, y, color='red', s=60)
+            plt.text(x + 3, y, JOINT_NAMES[j], color='red', fontsize=8)
+        for (j1, j2) in SKELETON:
+            print("Skeleton: ", j1, j2)
+            x1, y1 = gt_coords[j1]
+            x2, y2 = gt_coords[j2]
+            plt.plot([x1, x2], [y1, y2], 'r-', linewidth=1)
         plt.title("Ground Truth Keypoints")
         
         # Panel 2: Predicted Keypoints Overlay
@@ -154,7 +159,7 @@ kp_array = np.array(kp_values, dtype=float).reshape(-1, 3)[:, 0:2]
 kp_array *= 224
 label_tensor = torch.tensor(kp_array, dtype=torch.float32)
 
-label_tensor = label_tensor.unsqueeze(1)
+label_tensor = label_tensor.unsqueeze(0)
 # img_tensor = img_tensor.unsqueeze(1)
 
 plot_keypoints_and_heatmaps(img_tensor, label_tensor, out, num_samples=1)
