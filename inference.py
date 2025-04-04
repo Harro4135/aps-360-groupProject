@@ -6,6 +6,7 @@ from model_heatmap_embeds import ClosedPose
 from model_heatmap_embeds import hard_argmax
 import cv2
 import matplotlib.pyplot as plt
+import torch.nn.functional as F
 
 JOINT_NAMES = [
     "Head", "Left Shoulder", "Right Shoulder", "Left Elbow", "Right Elbow",
@@ -39,9 +40,9 @@ if torch.cuda.is_available():
     model = model.cuda()
     feature_extractor = feature_extractor.cuda()
 
-image_path = "../datasets/val_subset_single/standardized_images/single_10764.jpg"
+image_path = "../datasets/val_subset_single/standardized_images/single_88970.jpg"
 
-label_path = "../datasets/val_subset_single/labels/single_10764.txt"
+label_path = "../datasets/val_subset_single/labels/single_88970.txt"
 
 img = cv2.imread(str(image_path))
 if img is None:
@@ -75,6 +76,7 @@ def plot_keypoints_and_heatmaps(images, labels, pred_heatmaps, num_samples=2):
       pred_heatmaps: Tensor of shape [B, num_joints, h, w] predicted by the model.
       num_samples : Number of images to display.
     """
+    pred_heatmaps = F.interpolate(pred_heatmaps, size=(224, 224), mode='bilinear', align_corners=False)
     num_joints = labels.shape[1]
     for i in range(min(num_samples, images.size(0))):
         # ---- Denormalize and prepare image ----
@@ -133,6 +135,7 @@ def plot_keypoints_and_heatmaps(images, labels, pred_heatmaps, num_samples=2):
         fig_heat, axs = plt.subplots(nrows, ncols, figsize=(12, 12))
         axs = np.array(axs).reshape(-1)
         pred_heatmaps_i = pred_heatmaps[i]  # shape: [num_joints, h, w]
+        # cv2.imshow("", img)
         for j in range(num_joints):
             heatmap = pred_heatmaps_i[j]
             # Apply softmax over the flattened heatmap channel
