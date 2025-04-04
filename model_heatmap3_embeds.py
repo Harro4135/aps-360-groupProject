@@ -33,23 +33,23 @@ class ClosedPose(nn.Module):
         # resnet = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V1)
         # self.feature_extractor = nn.Sequential(*list(resnet.children())[:-2])
         self.decoder = nn.Sequential(
-            nn.Conv2d(2048, 3072, 3, 2, 0),
-            nn.BatchNorm2d(3072),
-            nn.ReLU(inplace=True),
-            nn.Dropout2d(p=0.1),
-            nn.Conv2d(3072, 4096, kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm2d(4096),
-            nn.ReLU(inplace=True),
-            nn.Dropout2d(p=0.1),
-            nn.ConvTranspose2d(4096, 3072, kernel_size=3, stride=1, padding=0),
-            nn.BatchNorm2d(3072),
-            nn.ReLU(inplace=True),
-            nn.Dropout2d(p=0.1),
-            nn.ConvTranspose2d(3072, 2048, kernel_size=3, stride=2, padding=0),
+            nn.Conv2d(2048, 2048, 3, 2, 0),
             nn.BatchNorm2d(2048),
             nn.ReLU(inplace=True),
             nn.Dropout2d(p=0.1),
-            nn.ConvTranspose2d(2048, 512, kernel_size=4, stride=2, padding=1),
+            nn.Conv2d(2048, 2048, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(2048),
+            nn.ReLU(inplace=True),
+            nn.Dropout2d(p=0.1),
+            nn.ConvTranspose2d(2048, 1536, kernel_size=3, stride=1, padding=0),
+            nn.BatchNorm2d(1536),
+            nn.ReLU(inplace=True),
+            nn.Dropout2d(p=0.1),
+            nn.ConvTranspose2d(1536, 1024, kernel_size=3, stride=2, padding=0),
+            nn.BatchNorm2d(1024),
+            nn.ReLU(inplace=True),
+            nn.Dropout2d(p=0.1),
+            nn.ConvTranspose2d(1024, 512, kernel_size=4, stride=2, padding=1),
             nn.BatchNorm2d(512),
             nn.ReLU(inplace=True),
             nn.Dropout2d(p=0.1),
@@ -302,7 +302,7 @@ def train(model, train_loader, val_loader, batch_size=30, learning_rate=0.00001,
               f"Train Loss: {avg_train_loss:.4f}, Train PCK: {avg_train_pck*100:.2f}% | "
               f"Val Loss: {avg_val_loss:.4f}, Val PCK: {avg_val_pck*100:.2f}%")
 
-        torch.save(model.state_dict(), "../checkpoints/" + "model2_" + str(learning_rate) + "_" + str(batch_size) + "_" + str(epoch) + ".pth")
+        torch.save(model.state_dict(), "../checkpoints/" + "model3_" + str(learning_rate) + "_" + str(batch_size) + "_" + str(epoch) + ".pth")
         data[epoch] = [epoch, avg_train_loss, avg_train_pck, avg_val_loss, avg_val_pck]
 
         # if (epoch + 1) % 10 == 0:
@@ -315,7 +315,7 @@ def train(model, train_loader, val_loader, batch_size=30, learning_rate=0.00001,
         #         gt_heatmaps = generate_heatmaps_batch(labels.to(device), H=H, W=W, sigma=4)
         #         plot_heatmaps(images, gt_heatmaps, pred_heatmaps)
     data = np.asarray(data)
-    np.savetxt("../stats/" + "model2_" + str(learning_rate) + "_" + str(batch_size) + "_" + str(epoch) + ".csv", data, header="epoch, train loss, train pck, val loss, val pck", delimiter=",")
+    np.savetxt("../stats/" + "model3_" + str(learning_rate) + "_" + str(batch_size) + "_" + str(epoch) + ".csv", data, header="epoch, train loss, train pck, val loss, val pck", delimiter=",")
     return model
 
 def evaluate(model, data_loader, device='cuda', threshold=20):
@@ -403,5 +403,5 @@ if __name__ == "__main__":
             if torch.cuda.is_available():
                 model = model.cuda()
                 print("Using GPU")
-            train(model, train_loader, val_loader, learning_rate=i, batch_size=j, num_epochs=70)
+            train(model, train_loader, val_loader, learning_rate=i, batch_size=j, num_epochs=50)
     
