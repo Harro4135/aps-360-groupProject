@@ -40,7 +40,7 @@ if torch.cuda.is_available():
     model = model.cuda()
     feature_extractor = feature_extractor.cuda()
 
-num = "199055"
+num = "498807"
 
 image_path = "../datasets/val_subset_single/standardized_images/single_"+num+".jpg"
 
