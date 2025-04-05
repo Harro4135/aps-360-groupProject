@@ -188,15 +188,7 @@ def train(model, train_loader, val_loader, num_epochs, learning_rate, pck_thresh
         
         # Save the fc layer parameters and performance metrics as a checkpoint.
         checkpoint_path = checkpoint_dir / f"epoch_{epoch+1}_fc_checkpoint.pth"
-        torch.save({
-            'epoch': epoch+1,
-            'train_loss': avg_train_loss,
-            'val_loss': val_loss,
-            'val_pck': val_pck,
-            'fc1': model.fc1.state_dict(),
-            'fc2': model.fc2.state_dict(),
-            'fc3': model.fc3.state_dict(),
-        }, str(checkpoint_path))
+        torch.save(model.state_dict(), str(checkpoint_path))
         print(f"Saved checkpoint: {checkpoint_path}")
         scheduler.step(val_loss)
 
@@ -234,7 +226,7 @@ if __name__ == '__main__':
     model.to(device)
 
     
-    train(model, train_loader, val_loader, num_epochs=50, learning_rate=0.01, pck_threshold=0.05)
+    train(model, train_loader, val_loader, num_epochs=100, learning_rate=0.01, pck_threshold=0.05)
 
 
 

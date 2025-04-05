@@ -46,11 +46,15 @@ image_path = "../datasets/val_subset_single/standardized_images/single_"+num+".j
 
 label_path = "../datasets/val_subset_single/labels/single_"+num+".txt"
 
+image_path = "../datasets/IMG_1498.jpg"
+
 img = cv2.imread(str(image_path))
 if img is None:
     raise RuntimeError(f"Failed to load image: {image_path}")
 # Convert from BGR to RGB.
 img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+# Resize to 224x224 (or whatever size your model expects).
+img = cv2.resize(img, (224, 224))
 # Convert to tensor and normalize.
 img_tensor = torch.tensor(img).permute(2, 0, 1).float() / 255.0
 # Add batch dimension.
@@ -166,5 +170,7 @@ label_tensor = torch.tensor(kp_array, dtype=torch.float32)
 
 label_tensor = label_tensor.unsqueeze(0)
 # img_tensor = img_tensor.unsqueeze(1)
+print("Label tensor: ", label_tensor.shape)
+label_tensor = torch.zeros(label_tensor.shape)
 
 plot_keypoints_and_heatmaps(img_tensor, label_tensor, out, num_samples=1)
